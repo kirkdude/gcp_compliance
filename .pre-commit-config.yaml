@@ -164,4 +164,4 @@ repos:
     rev: 0.2.2
     hooks:
       - id: checkmake
-      - id: checkmake-system
+        args: [--config=checkmake.ini]

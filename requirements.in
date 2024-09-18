@@ -1,3 +1,4 @@
 google-auth
 cloud-sql-python-connector
 pytest
+flake8
