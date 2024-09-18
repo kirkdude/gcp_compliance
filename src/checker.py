@@ -22,30 +22,47 @@ class ComplianceChecker:
     def run_checks(self):
         for rule in self.rules:
             logging.info(f"Running check: {rule['id']} - {rule['description']}")
-            check_function = getattr(self, rule["check_function"], None)
+            check_function_name = rule.get("check_function")
+            check_function = getattr(self, check_function_name, None)
             if callable(check_function):
-                check_function()
+                try:
+                    check_function(rule)
+                except Exception as e:
+                    logging.error(f"Error during check '{rule['id']}': {e}")
+                    # Output the gcloud command for debugging
+                    gcloud_command = rule.get("gcloud_command")
+                    if gcloud_command:
+                        logging.info(
+                            f'{"You can run the following gcloud command to debug:"}'
+                        )
+                        logging.info(gcloud_command)
             else:
-                logging.error(
-                    f"Check function {rule['check_function']} not implemented."
-                )
+                logging.error(f"Check function {check_function_name} not implemented.")
 
-    def check_sql_instances_not_public(self):
+    def check_sql_instances_not_public(self, rule):
         instances = get_cloud_sql_instances()
         for instance in instances:
-            if "0.0.0.0/0" in instance.get("authorizedNetworks", []):
+            authorized_networks = instance.get("authorizedNetworks", [])
+            if "0.0.0.0/0" in authorized_networks:
                 logging.warning(f"Instance '{instance['name']}' is open to the world.")
                 if not self.dry_run:
                     self.remediate_instance(instance)
+                else:
+                    logging.debug(
+                        "Dry-run mode enabled. No remediation will be performed."
+                    )
+                # Output the gcloud command for debugging
+                gcloud_command = rule.get("gcloud_command")
+                if gcloud_command:
+                    logging.info(
+                        f'{"You can run the following gcloud command to debug:"}'
+                    )
+                    logging.info(gcloud_command)
             else:
                 logging.info(f"Instance '{instance['name']}' is secure.")
 
     def remediate_instance(self, instance):
         logging.info(f"Remediating instance '{instance['name']}'...")
         # Placeholder for actual remediation logic
-        # For example, remove '0.0.0.0/0' from authorized networks
-        if self.dry_run:
-            logging.debug("Dry-run mode enabled. No changes will be made.")
-        else:
-            logging.debug("Applying changes to the instance.")
-            # Implement the API call to update the instance configuration
+        logging.debug("Applying changes to the instance.")
+        # Implement the API call to update the instance configuration
