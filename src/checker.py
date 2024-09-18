@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
 import json
-from utils import get_cloud_sql_instances
+from .utils import get_cloud_sql_instances
 
 
 class ComplianceChecker:
