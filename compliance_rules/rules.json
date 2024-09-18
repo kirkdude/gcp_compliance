@@ -1,0 +1,8 @@
+[
+  {
+    "check_function": "check_sql_instances_not_public",
+    "description": "Ensure that Cloud SQL instances are not open to the world",
+    "id": "SQL-001",
+    "resource": "cloud_sql"
+  }
+]
