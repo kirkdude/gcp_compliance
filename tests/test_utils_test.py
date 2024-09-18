@@ -1,6 +1,12 @@
 # -*- coding: utf-8 -*-
 import unittest
+import sys
+import os
+
 from src.utils import get_cloud_sql_instances
+
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 
 class TestUtils(unittest.TestCase):
