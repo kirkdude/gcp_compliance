@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 import logging
 import json
-from .utils import get_cloud_sql_instances
+import subprocess  # nosec: B404
+import re
+import shlex
 
 
 class ComplianceChecker:
@@ -22,47 +24,98 @@ class ComplianceChecker:
     def run_checks(self):
         for rule in self.rules:
             logging.info(f"Running check: {rule['id']} - {rule['description']}")
-            check_function_name = rule.get("check_function")
-            check_function = getattr(self, check_function_name, None)
-            if callable(check_function):
-                try:
-                    check_function(rule)
-                except Exception as e:
-                    logging.error(f"Error during check '{rule['id']}': {e}")
-                    # Output the gcloud command for debugging
-                    gcloud_command = rule.get("gcloud_command")
-                    if gcloud_command:
-                        logging.info(
-                            f'{"You can run the following gcloud command to debug:"}'
-                        )
-                        logging.info(gcloud_command)
+            gcloud_command = rule.get("gcloud_command")
+            if gcloud_command:
+                self.run_gcloud_check(rule)
             else:
-                logging.error(f"Check function {check_function_name} not implemented.")
+                logging.error(f"No gcloud_command specified for rule '{rule['id']}'.")
 
-    def check_sql_instances_not_public(self, rule):
-        instances = get_cloud_sql_instances()
-        for instance in instances:
-            authorized_networks = instance.get("authorizedNetworks", [])
-            if "0.0.0.0/0" in authorized_networks:
-                logging.warning(f"Instance '{instance['name']}' is open to the world.")
-                if not self.dry_run:
-                    self.remediate_instance(instance)
-                else:
-                    logging.debug(
-                        "Dry-run mode enabled. No remediation will be performed."
-                    )
-                # Output the gcloud command for debugging
-                gcloud_command = rule.get("gcloud_command")
-                if gcloud_command:
+    def run_gcloud_check(self, rule):
+        """
+        Executes the gcloud command specified in the compliance rule.
+
+        Parses the command into a list and executes it without shell=True to enhance security
+        and prevent shell injection vulnerabilities.
+
+        Args:
+            rule (dict): The compliance rule containing the gcloud command.
+        """
+        gcloud_command = rule.get("gcloud_command")
+        if not gcloud_command:
+            logging.error(f"No gcloud command specified for rule '{rule['id']}'.")
+            return
+
+        if not gcloud_command.startswith("gcloud"):
+            logging.error(f"Invalid gcloud command in rule '{rule['id']}'.")
+            return
+
+        try:
+            # Parse the command into a list
+            cmd_list = shlex.split(gcloud_command)
+            logging.debug(f"Executing gcloud command: {' '.join(cmd_list)}")
+            result = subprocess.run(
+                cmd_list,
+                capture_output=True,
+                text=True,
+                check=False,
+            )  # nosec: B603
+
+            if result.returncode != 0:
+                stderr = result.stderr.strip()
+                if self.is_service_disabled_error(stderr):
                     logging.info(
-                        f'{"You can run the following gcloud command to debug:"}'
+                        f"Service not enabled for rule '{rule['id']}'. Compliance check passed."
                     )
-                    logging.info(gcloud_command)
-            else:
-                logging.info(f"Instance '{instance['name']}' is secure.")
+                    return
+                elif self.is_permission_denied_error(stderr):
+                    logging.error(
+                        f"Permission denied while executing gcloud command for rule '{rule['id']}': {stderr}"
+                    )
+                    return
+                else:
+                    logging.error(
+                        f"Error executing gcloud command for rule '{rule['id']}': {stderr}"
+                    )
+                    return
 
-    def remediate_instance(self, instance):
-        logging.info(f"Remediating instance '{instance['name']}'...")
-        # Placeholder for actual remediation logic
-        logging.debug("Applying changes to the instance.")
-        # Implement the API call to update the instance configuration
+            output = result.stdout.strip()
+            if output:
+                logging.warning(f"Compliance check failed for rule '{rule['id']}':")
+                logging.warning(output)
+                logging.info("You can run the following gcloud command to debug:")
+                logging.info(gcloud_command)
+            else:
+                logging.info(f"Compliance check passed for rule '{rule['id']}'.")
+
+        except Exception as e:
+            logging.error(
+                f"Exception occurred while executing gcloud command for rule '{rule['id']}': {e}"
+            )
+
+    def is_service_disabled_error(self, stderr):
+        """
+        Checks if the stderr contains an error indicating that the API is not enabled.
+        """
+        service_disabled_patterns = [
+            r"API \[.*\] not enabled on project",
+            r"Cloud [^\s]+ API has not been used in project",
+            r"permission to access project [^\s]+ \(or it may not exist\)",
+        ]
+        for pattern in service_disabled_patterns:
+            if re.search(pattern, stderr):
+                return True
+        return False
+
+    def is_permission_denied_error(self, stderr):
+        """
+        Checks if the stderr contains a permission denied error.
+        """
+        permission_denied_patterns = [
+            r"Permission denied",
+            r"User \[.*\] does not have permission",
+            r"Request had insufficient authentication scopes",
+        ]
+        for pattern in permission_denied_patterns:
+            if re.search(pattern, stderr):
+                return True
+        return False

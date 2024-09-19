@@ -10,7 +10,7 @@ simple way to define compliance rules, run checks, and remediate issues.
 
 - **User-Friendly Compliance Rules**: Define rules in JSON format for easy management.
 - **Extensible Framework**: Add new compliance checks with minimal code changes.
-- **Debugging Tools**: Supports verbose logging, step-through debugging, and dry-run mode.
+- **Debugging Tools**: Supports verbose logging, step-through debugging.
 - **Cross-Platform Compatibility**: Run on Mac and Linux environments.
 - **Docker Support**: Deploy and run the framework in a Docker container.
 
@@ -19,9 +19,7 @@ simple way to define compliance rules, run checks, and remediate issues.
 ### Prerequisites
 
 - **Python 3.7+**
-- **Google Cloud SDK** installed and configured.
-- **Access to a Google Cloud Project** with Cloud SQL instances.
-- **Permissions**: Ensure you have at least `Cloud SQL Viewer` permissions.
+- **Google Cloud SDK** installed and configured and authenticated.
 
 ### Authentication
 

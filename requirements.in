@@ -2,3 +2,4 @@ google-auth
 cloud-sql-python-connector
 pytest
 flake8
+google-api-python-client
